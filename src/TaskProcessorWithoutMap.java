@@ -47,52 +47,67 @@ public class TaskProcessorWithoutMap implements Runnable{
         System.out.println("Start processing thread:" + this.threadNumber);
         while(true) {
             try {
-                Message message = inputMessageQueue.poll();
+                Message message = getMessageFromQueue(inputMessageQueue);
                 if(message != null) {
-                    System.out.println("Thread: "
-                            + threadNumber
-                            + " started processing message id: "
-                            + message.getId()
-                            + " with processing time of: "
-                            + message.getProcessingTime()
-                    );
-                    Thread.sleep(message.getProcessingTime());
-                    while(true) {
-                        synchronized (nextIdToProcess){
-                            if(message.getId() == nextIdToProcess.get()) {
-                                outputMessageQueue.add(message);
-
-                                System.out.println("Message with id: "
-                                        + message.getId()
-                                        + " with processing time: "
-                                        + message.getProcessingTime()
-                                        + " added (from thread:"
-                                        + threadNumber
-                                        + ")"
-                                );
-
-                                nextIdToProcess.incrementAndGet();
-                                nextIdToProcess.notifyAll();
-                                break;
-                            } else {
-
-                                System.out.println("Thread id: "
-                                            + threadNumber
-                                            + " processing message id: "
-                                            + message.getId()
-                                            + " is waiting");
-
-
-                                nextIdToProcess.wait();
-                            }
-                        }
-                    }
+                    processMessage(message);
+                    enqueueWhenNext(message, outputMessageQueue);
                 } else {
                     System.out.println("There is no message to process for thread: " + threadNumber);
                     Thread.sleep(1000);
                 }
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private synchronized Message getMessageFromQueue(Queue<Message> messageQueue) {
+        Message message = null;
+        if(!messageQueue.isEmpty()) {
+            message = inputMessageQueue.poll();
+        }
+        return message;
+    }
+
+    private void processMessage(Message message) throws InterruptedException {
+        System.out.println("Thread: "
+                + threadNumber
+                + " started processing message id: "
+                + message.getId()
+                + " with processing time of: "
+                + message.getProcessingTime()
+        );
+        Thread.sleep(message.getProcessingTime());
+    }
+
+    private void enqueueWhenNext(Message message, Queue<Message> outputMessageQueue) throws InterruptedException {
+        while(true) {
+            synchronized (outputMessageQueue) {
+                if (message.getId() == nextIdToProcess.get()) {
+                    outputMessageQueue.add(message);
+
+                    System.out.println("Message with id: "
+                            + message.getId()
+                            + " with processing time: "
+                            + message.getProcessingTime()
+                            + " added (from thread:"
+                            + threadNumber
+                            + ")"
+                    );
+
+                    nextIdToProcess.incrementAndGet();
+                    outputMessageQueue.notifyAll();
+                    break;
+                } else {
+
+                    System.out.println("Thread id: "
+                            + threadNumber
+                            + " processing message id: "
+                            + message.getId()
+                            + " is waiting");
+
+                    outputMessageQueue.wait();
+                }
             }
         }
     }
